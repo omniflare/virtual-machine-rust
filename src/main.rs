@@ -51,6 +51,104 @@ impl VM {
     fn ip_mut(&mut self) -> &mut i32 {
         &mut self.registers[IP]
     }
+
+    fn fetch(&self, program: &[i32]) -> i32 {
+        program[self.ip() as usize]
+    }
+
+    fn push(&mut self, value: i32) -> bool {
+        if self.sp() < STACK_SIZE as i32 - 1 {
+            *self.sp_mut() += 1;
+            self.stack[self.sp() as usize] = value;
+            true
+        } else {
+            eprintln!("STACK OVERFLOW");
+            return false;
+        }
+    }
+
+    fn pop(&mut self) -> Option<i32> {
+        if self.sp() >= 0 {
+            let value = self.stack[self.sp() as usize];
+            *self.sp_mut() -= 1;
+            Some(value)
+        } else {
+            eprintln!("STACK UNDERFLOW !!");
+            None
+        }
+    }
+
+    fn add(&mut self) -> bool {
+        if let (Some(a), Some(b)) = (self.pop(), self.pop()) {
+            match b.checked_add(a) {
+                Some(result) => {
+                    self.push(result);
+                    true
+                }
+                None => {
+                    eprintln!("Error: Integer overflow in addition");
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    fn sub(&mut self) -> bool {
+        if let (Some(a), Some(b)) = (self.pop(), self.pop()) {
+            match b.checked_sub(a) {
+                Some(result) => {
+                    self.push(result);
+                    true
+                }
+                None => {
+                    eprintln!("Error: Integer overflow in subtraction");
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    fn multiply(&mut self) -> bool {
+        if let (Some(a), Some(b)) = (self.pop(), self.pop()) {
+            match b.checked_mul(a) {
+                Some(result) => {
+                    self.push(result);
+                    true
+                }
+                None => {
+                    eprintln!("Error: Integer overflow in multiplication");
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    fn divide(&mut self) -> bool {
+        if let (Some(a), Some(b)) = (self.pop(), self.pop()) {
+            if (a == 0) {
+                eprintln!("Error: Cannot Divide By Zero");
+                return false;
+            }
+            match b.checked_div(a) {
+                Some(result) => {
+                    self.push(result);
+                    true
+                }
+                None => {
+                    eprintln!("Error: Integer overflow in Division");
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
 }
 
 const STACK_SIZE: usize = 256;
