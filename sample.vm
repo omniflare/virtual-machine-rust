@@ -1,0 +1,7 @@
+PSH 10
+PSH 5
+ADD  # 10 + 5 = 15
+PSH 3
+MUL  # 15 * 3 = 45
+PSH 5
+DIV  # 45 / 5 = 9
