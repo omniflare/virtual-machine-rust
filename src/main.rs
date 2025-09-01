@@ -1,7 +1,7 @@
 use std::env;
 use std::ffi::OsStr;
-use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
 
 #[repr(i32)]
@@ -19,7 +19,7 @@ enum Instruction {
 }
 
 struct VM {
-    runniing: bool,
+    running: bool,
     stack: [i32; STACK_SIZE],
     registers: [i32; NUM_OF_REGISTERS],
 }
@@ -27,7 +27,7 @@ struct VM {
 impl VM {
     fn new() -> Self {
         let mut vm = VM {
-            runniing: false,
+            running: false,
             stack: [0; STACK_SIZE],
             registers: [0; NUM_OF_REGISTERS],
         };
@@ -149,6 +149,58 @@ impl VM {
             false
         }
     }
+
+    fn eval(&mut self, instr: i32, program: &[i32]) {
+        match instr {
+            x if x == Instruction::HLT as i32 => {
+                self.running = false;
+            }
+            x if x == Instruction::PSH as i32 => {
+                *self.ip_mut() += 1;
+                let value = program[self.ip() as usize];
+                if !self.push(value) {
+                    self.running = false;
+                } else {
+                    println!("Pushed: {}", value);
+                }
+            }
+            x if x == Instruction::POP as i32 => {
+                if let Some(value) = self.pop() {
+                    println!("Popped: {}", value);
+                } else {
+                    self.running = false;
+                }
+            }
+            x if x == Instruction::ADD as i32 => {
+                if !self.add() {
+                    self.running = false;
+                }
+            }
+            x if x == Instruction::SUB as i32 => {
+                if !self.sub() {
+                    self.running = false;
+                }
+            }
+            x if x == Instruction::MUL as i32 => {
+                if !self.multiply() {
+                    self.running = false;
+                }
+            }
+            x if x == Instruction::DIV as i32 => {
+                if !self.divide() {
+                    self.running = false;
+                }
+            }
+            x if x == Instruction::SET as i32 => {
+                println!("SET not implemented yet");
+                self.running = false;
+            }
+            _ => {
+                println!("Unknown instruction: {}", instr);
+                self.running = false;
+            }
+        }
+    }
 }
 
 const STACK_SIZE: usize = 256;
@@ -233,6 +285,13 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
     let filename = &args[1];
+
+    let mut log_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("log.log")?;
+
     if Path::new(filename).extension() != Some(OsStr::new("vm")) {
         eprintln!("Error: Only .vm files are accepted.");
         return Ok(());
@@ -242,7 +301,31 @@ fn main() -> io::Result<()> {
     println!("{:?} ", program);
 
     let mut vm = VM::new();
-    println!("Initial IP: {}, SP: {}", vm.ip(), vm.sp());
-
+    vm.running = true;
+    // println!("Initial IP: {}, SP: {}", vm.ip(), vm.sp());
+    while vm.running {
+        let ip = vm.ip();
+        if ip < 0 || (ip as usize) >= program.len() {
+            eprintln!("Error: Program terminated without HLT or invalid IP");
+            writeln!(
+                log_file,
+                "Error: Program terminated without HLT or invalid IP"
+            )?;
+            break;
+        }
+        let instr = vm.fetch(&program);
+        vm.eval(instr, &program);
+        
+        writeln!(
+            log_file,
+            "IP: {}, SP: {}, Instr: {}, Stack: {:?}",
+            vm.ip(),
+            vm.sp(),
+            instr,
+            &vm.stack[0..=vm.sp().max(0) as usize]
+        )?;
+        
+        *vm.ip_mut() += 1;
+    }
     Ok(())
 }
