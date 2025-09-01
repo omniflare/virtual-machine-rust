@@ -22,6 +22,7 @@ struct VM {
     running: bool,
     stack: [i32; STACK_SIZE],
     registers: [i32; NUM_OF_REGISTERS],
+    error: bool, 
 }
 
 impl VM {
@@ -30,9 +31,10 @@ impl VM {
             running: false,
             stack: [0; STACK_SIZE],
             registers: [0; NUM_OF_REGISTERS],
+            error: false,
         };
-        vm.registers[SP] = -1; //stack pointer at -1;
-        vm.registers[IP] = 0; // instruction pointer at 0;
+        vm.registers[SP] = -1; 
+        vm.registers[IP] = 0;
         vm
     }
 
@@ -63,7 +65,8 @@ impl VM {
             true
         } else {
             eprintln!("STACK OVERFLOW");
-            return false;
+            self.error = true; 
+            false
         }
     }
 
@@ -74,6 +77,7 @@ impl VM {
             Some(value)
         } else {
             eprintln!("STACK UNDERFLOW !!");
+            self.error = true; 
             None
         }
     }
@@ -87,10 +91,12 @@ impl VM {
                 }
                 None => {
                     eprintln!("Error: Integer overflow in addition");
+                    self.error = true; 
                     false
                 }
             }
         } else {
+            self.error = true;
             false
         }
     }
@@ -104,10 +110,12 @@ impl VM {
                 }
                 None => {
                     eprintln!("Error: Integer overflow in subtraction");
+                    self.error = true;
                     false
                 }
             }
         } else {
+            self.error = true; 
             false
         }
     }
@@ -121,18 +129,23 @@ impl VM {
                 }
                 None => {
                     eprintln!("Error: Integer overflow in multiplication");
+                    self.error = true; 
                     false
                 }
             }
         } else {
+            self.error = true;
             false
         }
     }
 
     fn divide(&mut self) -> bool {
         if let (Some(a), Some(b)) = (self.pop(), self.pop()) {
-            if (a == 0) {
+            if a == 0 {
                 eprintln!("Error: Cannot Divide By Zero");
+                self.push(b);
+                self.push(a);
+                self.error = true;
                 return false;
             }
             match b.checked_div(a) {
@@ -142,10 +155,12 @@ impl VM {
                 }
                 None => {
                     eprintln!("Error: Integer overflow in Division");
+                    self.error = true; 
                     false
                 }
             }
         } else {
+            self.error = true;
             false
         }
     }
@@ -160,14 +175,10 @@ impl VM {
                 let value = program[self.ip() as usize];
                 if !self.push(value) {
                     self.running = false;
-                } else {
-                    println!("Pushed: {}", value);
                 }
             }
             x if x == Instruction::POP as i32 => {
-                if let Some(value) = self.pop() {
-                    println!("Popped: {}", value);
-                } else {
+                if self.pop().is_none() {
                     self.running = false;
                 }
             }
@@ -193,10 +204,12 @@ impl VM {
             }
             x if x == Instruction::SET as i32 => {
                 println!("SET not implemented yet");
+                self.error = true;
                 self.running = false;
             }
             _ => {
                 println!("Unknown instruction: {}", instr);
+                self.error = true; 
                 self.running = false;
             }
         }
@@ -212,8 +225,8 @@ const D: usize = 2;
 const E: usize = 3;
 const F: usize = 4;
 const G: usize = 5;
-const IP: usize = 6; //instruction pointer -- for op codes
-const SP: usize = 7; //stack pointer --for values
+const IP: usize = 6; 
+const SP: usize = 7;
 const NUM_OF_REGISTERS: usize = 8;
 
 fn string_to_instruction(token: &str) -> Instruction {
@@ -264,18 +277,58 @@ fn load_program(filename: &str) -> io::Result<Vec<i32>> {
                     continue;
                 }
             } else if op_code != Instruction::UNK {
-                // if it is not unkown push in the Instruction Array;
+                // if it is not unknown push in the Instruction Array;
                 program.push(op_code as i32);
             } else {
-                // if unkown skip this ;
-                i += 1;
-                continue;
+                // if unknown, push UNK opcode
+                program.push(Instruction::UNK as i32);
             }
             i += 1;
         }
     }
 
     Ok(program)
+}
+
+fn run_program(program: Vec<i32>, log_file: &mut File) -> Result<Option<i32>, ()> {
+    let mut vm = VM::new();
+    vm.running = true;
+
+    while vm.running {
+        let ip = vm.ip();
+        if ip < 0 || (ip as usize) >= program.len() {
+            writeln!(
+                log_file,
+                "Error: Program terminated without HLT or invalid IP"
+            )
+            .ok();
+            vm.error = true;
+            break;
+        }
+
+        let instr = vm.fetch(&program);
+        vm.eval(instr, &program);
+
+        writeln!(
+            log_file,
+            "IP: {}, SP: {}, Instr: {}, Stack: {:?}",
+            vm.ip(),
+            vm.sp(),
+            instr,
+            &vm.stack[0..=vm.sp().max(0) as usize]
+        )
+        .ok();
+
+        *vm.ip_mut() += 1;
+    }
+
+    if vm.error {
+        Err(())
+    } else if vm.sp() >= 0 {
+        Ok(Some(vm.stack[vm.sp() as usize]))
+    } else {
+        Ok(None)
+    }
 }
 
 fn main() -> io::Result<()> {
@@ -298,34 +351,12 @@ fn main() -> io::Result<()> {
     }
 
     let program = load_program(filename).unwrap();
-    println!("{:?} ", program);
-
-    let mut vm = VM::new();
-    vm.running = true;
-    // println!("Initial IP: {}, SP: {}", vm.ip(), vm.sp());
-    while vm.running {
-        let ip = vm.ip();
-        if ip < 0 || (ip as usize) >= program.len() {
-            eprintln!("Error: Program terminated without HLT or invalid IP");
-            writeln!(
-                log_file,
-                "Error: Program terminated without HLT or invalid IP"
-            )?;
-            break;
-        }
-        let instr = vm.fetch(&program);
-        vm.eval(instr, &program);
-        
-        writeln!(
-            log_file,
-            "IP: {}, SP: {}, Instr: {}, Stack: {:?}",
-            vm.ip(),
-            vm.sp(),
-            instr,
-            &vm.stack[0..=vm.sp().max(0) as usize]
-        )?;
-        
-        *vm.ip_mut() += 1;
+  
+    match run_program(program, &mut log_file) {
+        Ok(Some(result)) => println!("Final Result: {}", result),
+        Ok(None) => println!("Program finished with empty stack"),
+        Err(_) => {}
     }
+
     Ok(())
 }

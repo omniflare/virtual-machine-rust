@@ -1,8 +1,4 @@
-IP: 1, SP: 0, Instr: 0, Stack: [10]
-IP: 3, SP: 1, Instr: 0, Stack: [10, 5]
-IP: 4, SP: 0, Instr: 2, Stack: [15]
-IP: 6, SP: 1, Instr: 0, Stack: [15, 3]
-IP: 7, SP: 0, Instr: 4, Stack: [45]
-IP: 9, SP: 1, Instr: 0, Stack: [45, 5]
-IP: 10, SP: 0, Instr: 5, Stack: [9]
-Error: Program terminated without HLT or invalid IP
+IP: 0, SP: -1, Instr: 7, Stack: [0]
+P: 3, SP: 1, Instr: 0, Stack: [3, 10]
+IP: 4, SP: 0, Instr: 3, Stack: [-7]
+IP: 5, SP: 0, Instr: 7, Stack: [-7]
